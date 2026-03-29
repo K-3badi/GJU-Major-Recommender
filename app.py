@@ -37,7 +37,7 @@ if 'final_major' not in st.session_state:
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except:
-    pass # Fails silently if secrets aren't set, allowing app to still run
+    pass 
 
 @st.cache_resource(show_spinner=False)
 def load_model():
@@ -96,8 +96,12 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
     st.subheader("Stage 2: Pinpoint Your Major")
     st.info("Answer one final question to find your exact track within this school.")
     
-    # 7a. The Logic Tree
-    if school == "Business School (BS)":
+    # SAFETY NET: Initialize variables so it never crashes with a NameError
+    focus = None
+    mapping = {}
+
+    # 7a. The Logic Tree (Using 'in' makes it crash-proof against slight misspellings)
+    if "Management" in school or "Business" in school:
         focus = st.radio("What type of work sounds most appealing to you?",
             ["Analyzing data, building models, and finding trends", 
              "Creating campaigns and understanding consumer behavior",
@@ -112,7 +116,7 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Leading teams and managing general business operations": "Management Science"
         }
         
-    elif school == "School of Computing (SC)":
+    elif "Computing" in school:
         focus = st.radio("What is your primary interest in technology?",
             ["Writing code, developing software, and algorithms", 
              "Designing computer hardware and integrated systems",
@@ -123,7 +127,7 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Creating interactive media, 3D environments, and video games": "Game Design and Media Informatics"
         }
         
-    elif school == "School of Architecture and Built Environment (SABE)":
+    elif "Architecture" in school or "Built" in school:
         focus = st.radio("What do you want to design?",
             ["Entire buildings and urban structures", 
              "Indoor living spaces and aesthetics",
@@ -134,7 +138,7 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Visual graphics, branding, and multimedia": "Design and Visual Communication"
         }
         
-    elif school == "School of Applied Technical Sciences (SATS)":
+    elif "Technical" in school or "SATS" in school:
         focus = st.radio("Which area of engineering excites you more?",
             ["Robotics, automation, and smart systems", 
              "Optimizing manufacturing processes and production lines",
@@ -145,7 +149,7 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Designing physical machines and mechanical systems": "Mechanical and Maintenance Engineering"
         }
         
-    elif school == "School of Sustainable Systems Engineering (SSSE)":
+    elif "Sustainable" in school or "SSSE" in school:
         focus = st.radio("What kind of systems do you want to build?",
             ["Green infrastructure and water resources", 
              "Renewable power systems and sustainable fuels",
@@ -156,7 +160,7 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Electrical circuits, power grids, and electronics": "Electrical Engineering"
         }
         
-    elif school == "School of Applied Humanities and Social Sciences (SAHSS)":
+    elif "Humanities" in school or "Social" in school:
         focus = st.radio("What is your professional focus?",
             ["Translating texts and linguistics across languages", 
              "Corporate communications and international public relations"], index=None)
@@ -165,7 +169,7 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Corporate communications and international public relations": "German and English for Business and Communication (GEBC)"
         }
         
-    elif school == "School of Applied Medical Sciences (SAMS)":
+    elif "Medical" in school or "SAMS" in school:
         focus = st.radio("Which medical advancement interests you?",
             ["Designing medical equipment, prosthetics, and health tech", 
              "Developing chemical processes and new pharmaceuticals"], index=None)
@@ -174,10 +178,13 @@ if st.session_state.survey_submitted and not st.session_state.final_major:
             "Developing chemical processes and new pharmaceuticals": "Pharmaceutical & Chemical Engineering"
         }
         
-    elif school == "School Of Nursing (SN)":
+    elif "Nursing" in school:
         focus = "Nursing" # Auto-select
         mapping = {"Nursing": "Nursing Science"}
         st.write("Your predicted faculty offers a dedicated, specialized track.")
+        
+    else:
+        st.error(f"⚠️ Developer Note: The AI predicted '**{school}**', which isn't mapped. Update the conditions to catch this string!")
 
     # 7b. Major Reveal Button
     if focus:
@@ -196,7 +203,7 @@ if st.session_state.final_major:
     col1, col2 = st.columns(2)
     
     def save_and_reset(feedback_type):
-        try: # Try to save to DB, but don't crash if it fails
+        try:
             existing_data = conn.read(usecols=[0, 1, 2], ttl=5).dropna(how="all")
             new_row = pd.DataFrame([{
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
