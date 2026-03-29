@@ -46,7 +46,7 @@ with st.form("gju_survey"):
 if submit:
     input_df = pd.DataFrame([user_answers])
     prediction = model.predict(input_df)[0]
-    st.success(f"## Your Recommended School: \n # **{prediction}**")
+    st.chat_message("assistant").write(f"Based on your profile, I believe you would excel in the **{prediction}**. What do you think?")
     st.balloons()
     
     st.markdown("---")
