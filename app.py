@@ -1,31 +1,66 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import time
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
-# 1. Page Configuration
-st.set_page_config(page_title="GJU Major Recommender", page_icon="🎓")
+# --- 1. PAGE CONFIG & CUSTOM CSS ---
+st.set_page_config(page_title="GJU Major Recommender", page_icon="🎓", layout="centered", initial_sidebar_state="expanded")
 
-# 2. Database Connection
+# Inject Custom CSS to make it look professional
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;} /* Hides the top-right menu */
+    footer {visibility: hidden;}    /* Hides the Streamlit watermark */
+    header {visibility: hidden;}    /* Hides the top header bar */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: bold;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        border-color: #004b87; /* GJU Blue-ish hover */
+        color: #004b87;
+    }
+    .survey-container {
+        padding: 2rem;
+        border-radius: 10px;
+        background-color: #f8f9fa;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 2. INITIALIZE MEMORY (SESSION STATE) ---
+if 'prediction' not in st.session_state:
+    st.session_state.prediction = None
+if 'survey_submitted' not in st.session_state:
+    st.session_state.survey_submitted = False
+
+# --- 3. DATABASE & MODEL SETUP ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. Load the AI Model
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_model():
     return joblib.load('top 15.pkl')
 
 model = load_model()
 
-# 4. Give the App "Memory" (Session State)
-# This prevents the "Ghost Button" trap!
-if 'prediction' not in st.session_state:
-    st.session_state.prediction = None
+# --- 4. SIDEBAR (PROFESSIONAL CONTEXT) ---
+with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/en/thumb/5/52/German_Jordanian_University_logo.png/220px-German_Jordanian_University_logo.png", width=150)
+    st.markdown("### About This Tool")
+    st.write("This AI-driven recommendation engine is designed to help prospective students find their ideal academic path at GJU.")
+    st.write("By analyzing personal interests and mapping them against historical student success data, the system predicts the most suitable major.")
+    st.markdown("---")
+    st.caption("Powered by Machine Learning | Business Intelligence & Data Analytics")
 
-# 5. UI Header
+# --- 5. MAIN UI HEADER ---
 st.title("🎓 GJU Major Recommendation Engine")
-st.info("Input your interests below to see which GJU school matches your profile.")
+st.markdown("Discover your future at the German Jordanian University. Answer the 15 questions below to receive an AI-powered major prediction.")
+st.markdown("---")
 
+# --- 6. SURVEY FORM ---
 questions = {
     'A3': "I enjoy playing a musical instrument.", 
     'I1': "I like to study and help solve world problems.",
@@ -44,54 +79,62 @@ questions = {
     'S4': "I like helping people solve their daily problems."
 }
 
-with st.form("survey"):
-    answers = {}
-    for q_id, q_text in questions.items():
-        answers[q_id] = st.select_slider(q_text, options=[1, 2, 3, 4, 5], value=3)
-    
-    submit = st.form_submit_button("Predict My GJU Major", use_container_width=True)
+# Only show the form if they haven't submitted yet
+if not st.session_state.survey_submitted:
+    with st.form("survey_form"):
+        st.subheader("Rate your interest (1 = Low, 5 = High)")
+        answers = {}
+        for q_id, q_text in questions.items():
+            answers[q_id] = st.select_slider(q_text, options=[1, 2, 3, 4, 5], value=3)
+        
+        submitted = st.form_submit_button("Predict My GJU Major", use_container_width=True)
 
-# 6. Prediction Logic (Saves to Memory)
-if submit:
-    input_df = pd.DataFrame([answers])
-    st.session_state.prediction = model.predict(input_df)[0]
+    if submitted:
+        # UX: Fake processing time for professional feel
+        with st.spinner('Analyzing profile against GJU historical data...'):
+            time.sleep(1.2)
+            input_df = pd.DataFrame([answers])
+            st.session_state.prediction = model.predict(input_df)[0]
+            st.session_state.survey_submitted = True
+            st.rerun() # Refresh to hide the form and show the result
 
-# 7. Feedback & Database Saving
-# Because we use memory, this stays visible even after a button click!
-if st.session_state.prediction:
-    st.success(f"## Your Recommended School: \n # **{st.session_state.prediction}**")
+# --- 7. RESULT & FEEDBACK LOOP ---
+if st.session_state.survey_submitted and st.session_state.prediction:
+    st.success("### Analysis Complete!")
+    st.markdown(f"<h1 style='text-align: center; color: #004b87;'>{st.session_state.prediction}</h1>", unsafe_allow_html=True)
     st.balloons()
     
     st.markdown("---")
-    st.subheader("Help improve the AI: Was this accurate?")
+    st.subheader("Help us improve the algorithm:")
+    st.write("Does this major align with your expectations and interests?")
     
     col1, col2 = st.columns(2)
     
-    if col1.button("Yes, fits me! ✅", use_container_width=True):
-        # Read the current sheet, add the new row, and update
-        existing_data = conn.read(usecols=[0, 1, 2], ttl=5)
-        existing_data = existing_data.dropna(how="all") # Clean empty rows
-        
-        new_row = pd.DataFrame([{
-            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Major_Recommended": st.session_state.prediction,
-            "User_Feedback": "Correct"
-        }])
-        
-        updated_data = pd.concat([existing_data, new_row], ignore_index=True)
-        conn.update(data=updated_data)
-        st.toast("Success! Saved to your Google Sheet.")
+    # Function to handle database save and reset
+    def save_and_reset(feedback_type):
+        try:
+            existing_data = conn.read(usecols=[0, 1, 2], ttl=5).dropna(how="all")
+            new_row = pd.DataFrame([{
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Major_Recommended": st.session_state.prediction,
+                "User_Feedback": feedback_type
+            }])
+            updated_data = pd.concat([existing_data, new_row], ignore_index=True)
+            conn.update(data=updated_data)
+            
+            st.toast("✅ Feedback saved to database!")
+            time.sleep(1.5) # Let the user read the success message
+            
+            # Reset the app for the next user
+            st.session_state.prediction = None
+            st.session_state.survey_submitted = False
+            st.rerun()
+            
+        except Exception as e:
+            st.error("Could not save to database. Please try again.")
 
-    if col2.button("No, expected something else ❌", use_container_width=True):
-        existing_data = conn.read(usecols=[0, 1, 2], ttl=5)
-        existing_data = existing_data.dropna(how="all")
-        
-        new_row = pd.DataFrame([{
-            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Major_Recommended": st.session_state.prediction,
-            "User_Feedback": "Incorrect"
-        }])
-        
-        updated_data = pd.concat([existing_data, new_row], ignore_index=True)
-        conn.update(data=updated_data)
-        st.toast("Feedback recorded!")
+    if col1.button("Yes, fits me perfectly! ✅", use_container_width=True):
+        save_and_reset("Correct")
+
+    if col2.button("No, I expected something else ❌", use_container_width=True):
+        save_and_reset("Incorrect")
