@@ -48,3 +48,15 @@ if submit:
     prediction = model.predict(input_df)[0]
     st.success(f"## Your Recommended School: \n # **{prediction}**")
     st.balloons()
+    
+    st.markdown("---")
+    st.write("### Was this recommendation accurate?")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Yes, this fits me! ✅"):
+            st.toast("Thanks for the feedback! This helps validate our model.")
+            # In a real app, we would save this to a database
+    with col2:
+        if st.button("No, I expected something else ❌"):
+            st.toast("Interesting! We will use this to improve the AI.")
